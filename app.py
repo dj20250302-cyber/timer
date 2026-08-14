@@ -10,15 +10,15 @@ st.set_page_config(
     layout="centered"
 )
 
-# 음식 추천 앱에 어울리는 따뜻한 오렌지/크림 테마 CSS
+# 밝고 따뜻한 오렌지/크림 톤의 디자인 CSS
 CUSTOM_CSS = """
 <style>
-    /* 전체 배경색: 따뜻하고 밝은 크림 톤 */
+    /* 전체 배경색: 따뜻한 크림/연노랑 */
     .stApp {
         background-color: #fffbf0;
     }
 
-    /* 메인 결과 카드 레이아웃 */
+    /* 추천 결과 메인 카드 (중앙 강조 배치) */
     .result-card {
         background-color: #ffffff;
         padding: 2.5rem 2rem;
@@ -29,16 +29,16 @@ CUSTOM_CSS = """
         margin: 1.5rem 0;
     }
 
-    /* 추천 메뉴 이름 텍스트 (CSS clamp로 반응형 크기 조절) */
+    /* 요리 이름 텍스트 (CSS clamp로 화면 크기에 따라 반응형 자동 조절) */
     .dish-title {
         font-weight: 800;
         font-size: clamp(2.2rem, 8vw, 3.8rem);
-        color: #d97706; /* 따뜻한 오렌지 브라운 */
+        color: #d97706; /* 오렌지 브라운 */
         margin: 0.5rem 0;
         line-height: 1.2;
     }
 
-    /* 카테고리 태그 및 설명 텍스트 */
+    /* 카테고리 태그 스타일 */
     .dish-category {
         display: inline-block;
         background-color: #fef3c7;
@@ -65,7 +65,7 @@ st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 # ==========================================
 # 2. 요리 메뉴 데이터베이스 (리스트 & 딕셔너리)
 # ==========================================
-# 초보자도 메뉴를 쉽게 추가하거나 수정할 수 있는 데이터 구조입니다.
+# 학생들이 직접 요리를 추가하거나 수정할 수 있는 구조입니다.
 DISHES_DATABASE = [
     {
         "name": "🍜 김치찌개",
@@ -82,11 +82,11 @@ DISHES_DATABASE = [
     {
         "name": "🍛 카레라이스",
         "category": "일식/양식 🇯🇵",
-        "desc": "만들기 쉽고 한 그릇으로 든든한 든든한 한 끼",
+        "desc": "만들기 쉽고 한 그릇으로 든든한 한 끼",
         "tip": "양파를 갈색이 될 때까지 오래 볶으면 풍미가 깊어집니다."
     },
     {
-        "name": "🍝 알리오 올리오 파스타",
+        "name": "🍝 알리오 올리오",
         "category": "양식 🇮🇹",
         "desc": "마늘과 올리브 오일의 고소하고 알싸한 풍미",
         "tip": "면수와 올리브 오일을 잘 섞어 유화시키는 것이 핵심!"
@@ -110,22 +110,10 @@ DISHES_DATABASE = [
         "tip": "식빵 안쪽에 마요네즈나 머스타드를 바르면 눅눅해지지 않아요."
     },
     {
-        "name": "🌮 타코",
-        "category": "세계요리 🇲🇽",
-        "desc": "이색적이고 화려한 풍미를 즐기고 싶을 때",
-        "tip": "라임즙과 살사 소스를 취향껏 더해보세요."
-    },
-    {
-        "name": "🥩 찹스테이크",
-        "category": "양식 🇺🇸",
-        "desc": "달콤 짭조름한 소스와 두툼한 고기의 식감",
-        "tip": "파프리카와 양파를 큼직하게 썰어 함께 볶아주세요."
-    },
-    {
         "name": "떡볶이 🌶️",
         "category": "분식 🇰🇷",
         "desc": "매콤달콤 국민 간식이자 영원한 영혼의 음식",
-        "tip": "삶은 계란과 어묵, 삶은 당면을 추가하면 최고!"
+        "tip": "삶은 계란과 어묵, 삶은 당면을 추가하면 완벽합니다."
     }
 ]
 
@@ -133,27 +121,30 @@ DISHES_DATABASE = [
 # ==========================================
 # 3. 세션 상태(st.session_state) 초기화
 # ==========================================
+# 새로고침이나 버튼 클릭 시에도 상태를 유지하기 위해 사용합니다.
 if "current_dish" not in st.session_state:
-    st.session_state.current_dish = None  # 현재 추천된 요리 데이터
+    st.session_state.current_dish = None  # 현재 뽑힌 요리
 if "history" not in st.session_state:
-    st.session_state.history = []         # 뽑았던 메뉴 기록
+    st.session_state.history = []         # 최근 뽑은 요리 히스토리 (최대 5개)
 
 
 # ==========================================
-# 4. 요리 추천 로직 함수들
+# 4. 요리 추천 로직 함수
 # ==========================================
-def recommend_random_dish(selected_category="전체"):
+def recommend_random_dish(selected_category):
     """선택한 카테고리에 맞는 요리를 무작위로 추첨하는 함수"""
+    # 1) 카테고리 필터링
     if selected_category == "전체":
         candidates = DISHES_DATABASE
     else:
-        candidates = [d for d in DISHES_DATABASE if selected_category in d["category"]]
+        candidates = [dish for dish in DISHES_DATABASE if selected_category in dish["category"]]
     
+    # 2) 무작위 뽑기 및 히스토리 저장
     if candidates:
         chosen = random.choice(candidates)
         st.session_state.current_dish = chosen
         
-        # 최근 추천 기록 저장 (최대 5개까지 유지)
+        # 최근 기록에 추가 (중복 방지 및 최근 5개 유지)
         if chosen["name"] not in st.session_state.history:
             st.session_state.history.insert(0, chosen["name"])
             if len(st.session_state.history) > 5:
@@ -163,22 +154,21 @@ def recommend_random_dish(selected_category="전체"):
 # ==========================================
 # 5. 메인 앱 화면 구성
 # ==========================================
-st.title("🍽️ 오늘 뭐 먹지?")
-st.subheader("🎲 고민 해결! 무작위 요리 추천기")
-st.write("결정 장애가 올 땐 버튼을 눌러 오늘 먹을 요리를 추천받아 보세요!")
+st.title("🍽️ 오늘 뭐 먹지? 무작위 요리 추천기")
+st.write("결정하기 어려울 땐 카테고리를 선택하고 아래 버튼을 눌러 오늘 먹을 요리를 뽑아보세요!")
 
 st.divider()
 
-# --- 카테고리 필터 선택 ---
+# --- 카테고리 선택 셀렉트박스 ---
 categories = ["전체", "한식 🇰🇷", "양식 🇮🇹", "중식 🇨🇳", "간편식 ⚡", "분식 🇰🇷"]
-selected_cat = st.selectbox("🎯 원하시는 요리 종류(카테고리)를 선택하세요:", categories)
+selected_cat = st.selectbox("🎯 원하시는 요리 카테고리를 선택하세요:", categories)
 
 # --- 추천 실행 버튼 ---
 if st.button("🎲 오늘의 요리 추천받기!", type="primary", use_container_width=True):
     recommend_random_dish(selected_cat)
-    st.balloons()  # 흥미를 돋우는 축하 폭죽 애니메이션
+    st.balloons()  # 흥미를 돋우는 축하 풍선 효과
 
-# --- 추천 결과 카드 영역 ---
+# --- 추천 결과 출력 영역 ---
 if st.session_state.current_dish:
     dish = st.session_state.current_dish
     
@@ -189,9 +179,9 @@ if st.session_state.current_dish:
     st.caption(f"💡 조리 꿀팁: {dish["tip"]}")
     st.markdown('</div>', unsafe_allow_html=True)
 else:
-    st.info("👆 위 버튼을 눌러 오늘 먹을 요리를 뽑아보세요!")
+    st.info("👆 위 버튼을 눌러 오늘 먹을 메뉴를 무작위로 뽑아보세요!")
 
-# --- 최근 추천받은 메뉴 히스토리 ---
+# --- 최근 추천 목록 ---
 if st.session_state.history:
     st.write("##### 📜 최근 뽑은 메뉴 기록")
     st.write(" · ".join(st.session_state.history))
