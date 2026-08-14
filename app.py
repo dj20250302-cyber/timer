@@ -1,57 +1,60 @@
-import math
-import time
+import random
 import streamlit as st
 
 # ==========================================
 # 1. 페이지 기본 설정 및 반응형 CSS 스타일
 # ==========================================
 st.set_page_config(
-    page_title="⏱️ 나만의 반응형 타이머",
+    page_title="🍽️ 오늘 뭐 먹지? 무작위 요리 추천기",
     page_icon="🍳",
     layout="centered"
 )
 
-# 음식 타이머에 어울리는 따뜻하고 밝은 요리 테마 CSS
+# 음식 추천 앱에 어울리는 따뜻한 오렌지/크림 테마 CSS
 CUSTOM_CSS = """
 <style>
-    /* 기본 배경색: 따뜻한 크림/연노랑 */
+    /* 전체 배경색: 따뜻하고 밝은 크림 톤 */
     .stApp {
-        background-color: #fffbeb;
+        background-color: #fffbf0;
     }
 
-    /* 메인 카드 레이아웃 (중앙 배치) */
-    .main-card {
+    /* 메인 결과 카드 레이아웃 */
+    .result-card {
         background-color: #ffffff;
         padding: 2.5rem 2rem;
         border-radius: 24px;
-        box-shadow: 0 10px 25px rgba(217, 119, 6, 0.1);
+        box-shadow: 0 12px 30px rgba(217, 119, 6, 0.12);
         border: 2px solid #fde68a;
         text-align: center;
-        margin-top: 1rem;
-        margin-bottom: 1.5rem;
+        margin: 1.5rem 0;
     }
 
-    /* 반응형 타이머 시간 표시 (CSS clamp 사용으로 자동 크기 조절) */
-    .timer-display {
-        font-family: 'Courier New', Courier, monospace;
+    /* 추천 메뉴 이름 텍스트 (CSS clamp로 반응형 크기 조절) */
+    .dish-title {
         font-weight: 800;
-        font-size: clamp(3.2rem, 13vw, 6rem);
-        color: #d97706; /* 오렌지 브라운 */
-        margin: 0.5rem 0 1.5rem 0;
-        line-height: 1;
-        letter-spacing: -2px;
+        font-size: clamp(2.2rem, 8vw, 3.8rem);
+        color: #d97706; /* 따뜻한 오렌지 브라운 */
+        margin: 0.5rem 0;
+        line-height: 1.2;
     }
 
-    /* Streamlit 진행률 바 색상 커스텀 */
-    .stProgress > div > div > div > div {
-        background-color: #f59e0b !important;
+    /* 카테고리 태그 및 설명 텍스트 */
+    .dish-category {
+        display: inline-block;
+        background-color: #fef3c7;
+        color: #b45309;
+        font-weight: 700;
+        padding: 0.4rem 1.2rem;
+        border-radius: 20px;
+        font-size: 1.1rem;
+        margin-bottom: 0.8rem;
     }
 
-    /* 모바일 기기에서의 버튼 정렬 개선 */
+    /* 모바일 버튼 반응형 스타일 */
     @media (max-width: 600px) {
         .stButton > button {
             width: 100% !important;
-            margin-bottom: 0.25rem;
+            margin-bottom: 0.3rem;
         }
     }
 </style>
@@ -60,185 +63,135 @@ st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 
 # ==========================================
-# 2. 세션 상태(st.session_state) 초기화
+# 2. 요리 메뉴 데이터베이스 (리스트 & 딕셔너리)
 # ==========================================
-# 타이머의 동작 상태와 설정값을 세션 상태로 기억합니다.
-if "timer_state" not in st.session_state:
-    st.session_state.timer_state = "stopped"  # stopped, running, paused, finished
-if "total_seconds" not in st.session_state:
-    st.session_state.total_seconds = 0       # 전체 지정된 초
-if "remaining_seconds" not in st.session_state:
-    st.session_state.remaining_seconds = 0   # 남은 초
-if "end_time" not in st.session_state:
-    st.session_state.end_time = 0.0           # 종료 절대 시간 (time.monotonic 기준)
-if "input_min" not in st.session_state:
-    st.session_state.input_min = 3           # 기본값: 컵라면 3분
-if "input_sec" not in st.session_state:
-    st.session_state.input_sec = 0
+# 초보자도 메뉴를 쉽게 추가하거나 수정할 수 있는 데이터 구조입니다.
+DISHES_DATABASE = [
+    {
+        "name": "🍜 김치찌개",
+        "category": "한식 🇰🇷",
+        "desc": "매콤하고 얼큰한 국물이 생각날 때 최고의 선택!",
+        "tip": "돼지고기와 푹 익은 신김치를 달달 볶아 끓여보세요."
+    },
+    {
+        "name": "🍲 된장찌개",
+        "category": "한식 🇰🇷",
+        "desc": "구수하고 정갈한 한국인의 대표 집밥 요리",
+        "tip": "두부와 애호박, 버섯을 듬뿍 넣으면 더 풍성해집니다."
+    },
+    {
+        "name": "🍛 카레라이스",
+        "category": "일식/양식 🇯🇵",
+        "desc": "만들기 쉽고 한 그릇으로 든든한 든든한 한 끼",
+        "tip": "양파를 갈색이 될 때까지 오래 볶으면 풍미가 깊어집니다."
+    },
+    {
+        "name": "🍝 알리오 올리오 파스타",
+        "category": "양식 🇮🇹",
+        "desc": "마늘과 올리브 오일의 고소하고 알싸한 풍미",
+        "tip": "면수와 올리브 오일을 잘 섞어 유화시키는 것이 핵심!"
+    },
+    {
+        "name": "🥟 마라탕",
+        "category": "중식 🇨🇳",
+        "desc": "얼얼하고 매콤해서 스트레스가 싹 풀리는 메뉴",
+        "tip": "좋아하는 버섯, 푸주, 분모자를 취향껏 넣어보세요."
+    },
+    {
+        "name": "🍳 햄 계란볶음밥",
+        "category": "간편식 ⚡",
+        "desc": "냉장고 파먹기에 딱 좋은 초간단 메뉴",
+        "tip": "파기름을 먼저 내고 찬밥을 눌러가며 볶아주세요."
+    },
+    {
+        "name": "🥪 클럽 샌드위치",
+        "category": "간편식 ⚡",
+        "desc": "신선한 야채와 계란, 베이컨의 환상 조합",
+        "tip": "식빵 안쪽에 마요네즈나 머스타드를 바르면 눅눅해지지 않아요."
+    },
+    {
+        "name": "🌮 타코",
+        "category": "세계요리 🇲🇽",
+        "desc": "이색적이고 화려한 풍미를 즐기고 싶을 때",
+        "tip": "라임즙과 살사 소스를 취향껏 더해보세요."
+    },
+    {
+        "name": "🥩 찹스테이크",
+        "category": "양식 🇺🇸",
+        "desc": "달콤 짭조름한 소스와 두툼한 고기의 식감",
+        "tip": "파프리카와 양파를 큼직하게 썰어 함께 볶아주세요."
+    },
+    {
+        "name": "떡볶이 🌶️",
+        "category": "분식 🇰🇷",
+        "desc": "매콤달콤 국민 간식이자 영원한 영혼의 음식",
+        "tip": "삶은 계란과 어묵, 삶은 당면을 추가하면 최고!"
+    }
+]
 
 
 # ==========================================
-# 3. 타이머 동작 제어 함수들 (콜백)
+# 3. 세션 상태(st.session_state) 초기화
 # ==========================================
-def set_recipe_preset(minutes, seconds=0):
-    """추천 음식 버튼을 눌렀을 때 분/초를 설정하는 함수"""
-    if st.session_state.timer_state in ["stopped", "finished"]:
-        st.session_state.input_min = minutes
-        st.session_state.input_sec = seconds
-
-def start_timer():
-    """타이머 시작 및 일시정지 후 계속 진행 함수"""
-    current_now = time.monotonic()
-    
-    if st.session_state.timer_state in ["stopped", "finished"]:
-        # 총 시간(초) 계산
-        calculated_total = (st.session_state.input_min * 60) + st.session_state.input_sec
-        
-        # 오류 검증: 0초일 때 실행 방지
-        if calculated_total <= 0:
-            st.warning("⚠️ 0분 0초 이상으로 시간을 설정해 주세요!")
-            return
-            
-        st.session_state.total_seconds = calculated_total
-        st.session_state.remaining_seconds = calculated_total
-        # 정확한 종료 절대 시각 계산 (time.monotonic)
-        st.session_state.end_time = current_now + calculated_total
-        st.session_state.timer_state = "running"
-        
-    elif st.session_state.timer_state == "paused":
-        # 일시정지 후 계속 시작할 경우, 남아있는 초를 기반으로 종료 시각 재계산
-        st.session_state.end_time = current_now + st.session_state.remaining_seconds
-        st.session_state.timer_state = "running"
-
-def pause_timer():
-    """타이머 일시정지 함수"""
-    if st.session_state.timer_state == "running":
-        current_now = time.monotonic()
-        # 오차 없는 남아있는 시간을 계산하여 저장
-        st.session_state.remaining_seconds = max(0, math.ceil(st.session_state.end_time - current_now))
-        st.session_state.timer_state = "paused"
-
-def reset_timer():
-    """타이머 초기화 함수"""
-    st.session_state.timer_state = "stopped"
-    st.session_state.total_seconds = 0
-    st.session_state.remaining_seconds = 0
-    st.session_state.end_time = 0.0
+if "current_dish" not in st.session_state:
+    st.session_state.current_dish = None  # 현재 추천된 요리 데이터
+if "history" not in st.session_state:
+    st.session_state.history = []         # 뽑았던 메뉴 기록
 
 
 # ==========================================
-# 4. st.fragment 기반 실시간 화면 업데이트
+# 4. 요리 추천 로직 함수들
 # ==========================================
-@st.fragment(run_every=0.5)
-def render_timer_ui():
-    """0.5초마다 시간 오차 없이 남아있는 시간을 계산하고 화면을 그려주는 영역"""
-    
-    # 1) 시간 차이 계산 (time.monotonic 기반)
-    if st.session_state.timer_state == "running":
-        current_now = time.monotonic()
-        time_left = st.session_state.end_time - current_now
-        
-        if time_left <= 0:
-            st.session_state.remaining_seconds = 0
-            st.session_state.timer_state = "finished"
-            st.rerun()  # 전체 UI 상태 업데이트
-        else:
-            st.session_state.remaining_seconds = math.ceil(time_left)
-
-    # 2) MM:SS 단위 포맷팅
-    rem_sec = st.session_state.remaining_seconds
-    
-    if st.session_state.timer_state in ["stopped", "finished"] and rem_sec == 0:
-        disp_min = st.session_state.input_min
-        disp_sec = st.session_state.input_sec
+def recommend_random_dish(selected_category="전체"):
+    """선택한 카테고리에 맞는 요리를 무작위로 추첨하는 함수"""
+    if selected_category == "전체":
+        candidates = DISHES_DATABASE
     else:
-        disp_min = rem_sec // 60
-        disp_sec = rem_sec % 60
-
-    # 3) 진행률 계산
-    if st.session_state.total_seconds > 0:
-        progress = max(0.0, min(1.0, rem_sec / st.session_state.total_seconds))
-    else:
-        progress = 1.0
-
-    # 4) 카드 형태 UI 출력
-    st.markdown('<div class="main-card">', unsafe_allow_html=True)
-    st.markdown(f'<div class="timer-display">{disp_min:02d}:{disp_sec:02d}</div>', unsafe_allow_html=True)
-    st.progress(progress)
+        candidates = [d for d in DISHES_DATABASE if selected_category in d["category"]]
     
-    # 완료 및 안내 메시지 처리
-    if st.session_state.timer_state == "finished":
-        st.balloons()  # 성공 풍선 효과
-        st.success("🎉 시간이 다 되었습니다! 맛있는 요리가 완성되었어요! 🍽️")
-    elif st.session_state.timer_state == "paused":
-        st.info("⏸️ 타이머가 일시정지 상태입니다.")
-    elif st.session_state.timer_state == "running":
-        st.caption("🔥 요리 타이머가 작동 중입니다...")
-    
-    st.markdown('</div>', unsafe_allow_html=True)
+    if candidates:
+        chosen = random.choice(candidates)
+        st.session_state.current_dish = chosen
+        
+        # 최근 추천 기록 저장 (최대 5개까지 유지)
+        if chosen["name"] not in st.session_state.history:
+            st.session_state.history.insert(0, chosen["name"])
+            if len(st.session_state.history) > 5:
+                st.session_state.history.pop()
 
 
 # ==========================================
-# 5. 메인 앱 화면 레이아웃
+# 5. 메인 앱 화면 구성
 # ==========================================
-st.title("⏱️ 나만의 반응형 타이머")
-st.subheader("🍳 맛있는 추천 음식 조리 타이머")
-st.write("원하는 추천 음식을 선택하거나 직접 분/초를 입력하고 시작을 눌러주세요.")
-
-# --- 추천 음식 빠른 설정 버튼 ---
-st.write("##### 🍽️ 추천 음식 시간 설정")
-p_col1, p_col2, p_col3, p_col4, p_col5 = st.columns(5)
-
-# 작동 중에는 버튼 클릭 불가 처리
-is_disabled = st.session_state.timer_state in ["running", "paused"]
-
-with p_col1:
-    st.button("🍜 컵라면\n(3분)", on_click=set_recipe_preset, args=(3, 0), disabled=is_disabled, use_container_width=True)
-with p_col2:
-    st.button("🍲 봉지라면\n(4분)", on_click=set_recipe_preset, args=(4, 0), disabled=is_disabled, use_container_width=True)
-with p_col3:
-    st.button("🥚 반숙계란\n(7분)", on_click=set_recipe_preset, args=(7, 0), disabled=is_disabled, use_container_width=True)
-with p_col4:
-    st.button("🥚 완숙계란\n(12분)", on_click=set_recipe_preset, args=(12, 0), disabled=is_disabled, use_container_width=True)
-with p_col5:
-    st.button("🍝 파스타\n(8분)", on_click=set_recipe_preset, args=(8, 0), disabled=is_disabled, use_container_width=True)
+st.title("🍽️ 오늘 뭐 먹지?")
+st.subheader("🎲 고민 해결! 무작위 요리 추천기")
+st.write("결정 장애가 올 땐 버튼을 눌러 오늘 먹을 요리를 추천받아 보세요!")
 
 st.divider()
 
-# --- 분 / 초 입력 영역 ---
-in_col1, in_col2 = st.columns(2)
-with in_col1:
-    st.number_input(
-        "분 (Min)",
-        min_value=0,
-        max_value=999,
-        key="input_min",
-        disabled=is_disabled
-    )
-with in_col2:
-    st.number_input(
-        "초 (Sec)",
-        min_value=0,
-        max_value=59,
-        key="input_sec",
-        disabled=is_disabled
-    )
+# --- 카테고리 필터 선택 ---
+categories = ["전체", "한식 🇰🇷", "양식 🇮🇹", "중식 🇨🇳", "간편식 ⚡", "분식 🇰🇷"]
+selected_cat = st.selectbox("🎯 원하시는 요리 종류(카테고리)를 선택하세요:", categories)
 
-# --- 실시간 타이머 영역 출력 ---
-render_timer_ui()
+# --- 추천 실행 버튼 ---
+if st.button("🎲 오늘의 요리 추천받기!", type="primary", use_container_width=True):
+    recommend_random_dish(selected_cat)
+    st.balloons()  # 흥미를 돋우는 축하 폭죽 애니메이션
 
-st.write("")
+# --- 추천 결과 카드 영역 ---
+if st.session_state.current_dish:
+    dish = st.session_state.current_dish
+    
+    st.markdown('<div class="result-card">', unsafe_allow_html=True)
+    st.markdown(f'<div class="dish-category">{dish["category"]}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="dish-title">{dish["name"]}</div>', unsafe_allow_html=True)
+    st.markdown(f'**"{dish["desc"]}"**')
+    st.caption(f"💡 조리 꿀팁: {dish["tip"]}")
+    st.markdown('</div>', unsafe_allow_html=True)
+else:
+    st.info("👆 위 버튼을 눌러 오늘 먹을 요리를 뽑아보세요!")
 
-# --- 시작 / 일시정지 / 계속 / 초기화 제어 버튼 ---
-btn_col1, btn_col2 = st.columns(2)
-
-with btn_col1:
-    if st.session_state.timer_state in ["stopped", "finished"]:
-        st.button("▶️ 조리 시작", on_click=start_timer, type="primary", use_container_width=True)
-    elif st.session_state.timer_state == "running":
-        st.button("⏸️ 일시정지", on_click=pause_timer, type="secondary", use_container_width=True)
-    elif st.session_state.timer_state == "paused":
-        st.button("▶️ 계속 진행", on_click=start_timer, type="primary", use_container_width=True)
-
-with btn_col2:
-    st.button("🔄 초기화", on_click=reset_timer, use_container_width=True)
+# --- 최근 추천받은 메뉴 히스토리 ---
+if st.session_state.history:
+    st.write("##### 📜 최근 뽑은 메뉴 기록")
+    st.write(" · ".join(st.session_state.history))
