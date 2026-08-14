@@ -176,9 +176,9 @@ def render_timer_ui():
 st.title("⏱️ 블루 타이머")
 st.write("원하는 시간을 설정하고 시작 버튼을 눌러주세요.")
 
-# --- 빠른 시간 설정 버튼 ---
+# --- 빠른 시간 설정 버튼 (1분, 3분, 5분, 10분, 30분) ---
 st.write("##### 🚀 빠른 시간 설정")
-p_col1, p_col2, p_col3, p_col4 = st.columns(4)
+p_col1, p_col2, p_col3, p_col4, p_col5 = st.columns(5)
 
 is_disabled = st.session_state.timer_state in ["running", "paused"]
 
@@ -190,6 +190,8 @@ with p_col3:
     st.button("5분", on_click=set_preset_time, args=(5,), disabled=is_disabled, use_container_width=True)
 with p_col4:
     st.button("10분", on_click=set_preset_time, args=(10,), disabled=is_disabled, use_container_width=True)
+with p_col5:
+    st.button("30분", on_click=set_preset_time, args=(30,), disabled=is_disabled, use_container_width=True)
 
 st.divider()
 
